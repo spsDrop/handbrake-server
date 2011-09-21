@@ -1,0 +1,10 @@
+h3 Queued Jobs
+ol
+    - queuedJobs.forEach(function(job){
+        li 
+            span.name= job.name
+            |  - 
+            span.status= job.status
+            |  - 
+            a(href="/remove/"+job.id) remove job
+    - })

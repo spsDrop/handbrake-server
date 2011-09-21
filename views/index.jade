@@ -1,0 +1,51 @@
+.hand-brake
+    h1= title
+    - if(msgs.length){
+        ul.messages
+            - msgs.forEach(function(msg){
+                li #{msg}
+            - })
+    - }
+    - if(errors.length){
+        ul.errors
+            - errors.forEach(function(error){
+                li #{error}
+            - })
+    - }
+    ul.add-jobs
+        li.add-job
+            form(action="/add/",method="get")
+                fieldset
+                    legend Add Job
+                    field
+                        label Full Path
+                        input(name="path")
+                    field
+                        label Encoding Profile
+                        select(name="profile")
+                            - for( var profile in profiles){
+                                option(value=profile)= profile
+                            - }
+                    field
+                        input(type="submit")
+        
+        li.add-job.folder
+            form(action="/add-folder/",method="get")
+                fieldset
+                    legend Add Folder
+                    field
+                        label Full Path
+                        input(name="path")
+                    field
+                        label Encoding Profile
+                        select(name="profile")
+                            - for( var profile in profiles){
+                                option(value=profile)= profile
+                            - }
+                    field
+                        input(type="submit")
+    ul.jobs-queue
+        li.job-queue.ready
+            include queue
+        li.job-queue.complete
+            include complete
