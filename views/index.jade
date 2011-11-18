@@ -1,17 +1,12 @@
 .hand-brake
     h1= title
-    - if(msgs.length){
-        ul.messages
+    ul.messages
+        - if(msgs.length){
             - msgs.forEach(function(msg){
                 li #{msg}
             - })
-    - }
-    - if(errors.length){
-        ul.errors
-            - errors.forEach(function(error){
-                li #{error}
-            - })
-    - }
+        - }
+        
     ul.add-jobs
         li.add-job
             form(action="/add/",method="get")
@@ -19,13 +14,16 @@
                     legend Add Job
                     field
                         label Full Path
-                        input(name="path")
+                        input.folder-search(name="path",value=rootFolder)
                     field
                         label Encoding Profile
                         select(name="profile")
                             - for( var profile in profiles){
                                 option(value=profile)= profile
                             - }
+                    field
+                        label Delete Source
+                        input(name="deleteSource",type="checkbox")
                     field
                         input(type="submit")
         
@@ -35,13 +33,16 @@
                     legend Add Folder
                     field
                         label Full Path
-                        input(name="path")
+                        input.folder-search(name="path",value=rootFolder)
                     field
                         label Encoding Profile
                         select(name="profile")
                             - for( var profile in profiles){
                                 option(value=profile)= profile
                             - }
+                    field
+                        label Delete Source
+                        input(name="deleteSource",type="checkbox")
                     field
                         input(type="submit")
     ul.jobs-queue

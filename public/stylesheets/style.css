@@ -43,7 +43,7 @@ fieldset field{
 }
 
 input[name=path]{
-    width:300px;
+    width:350px;
 }
 
 ol li{
@@ -56,7 +56,7 @@ ul ul li, ul ol li{
 
 .hand-brake{
     width:900px;
-    margin:25px auto 50px auto;
+    margin:50px auto;
     padding:12px 25px 25px 25px;
     background:white url(/images/hb-icon.png) no-repeat 795px 25px;
     box-shadow:0 10px 40px rgba(0,0,0,.45);

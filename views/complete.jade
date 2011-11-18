@@ -1,10 +1,11 @@
-h3 Complete Jobs
-    ul
-        - completedJobs.forEach(function(job){
-            li 
-                span.name= job.name
-                |  - 
+h3 Complete Jobs&nbsp;
+    a(href="/clear-completed/") Clear
+ul
+    - completedJobs.forEach(function(job){
+        li 
+            span.name= job.name
+            p 
                 span.status= job.status
-                |  - 
+            p
                 a(href="/readd/"+job.id) Restart
-        - })
+    - })

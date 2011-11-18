@@ -67,6 +67,7 @@ YUI().use("json","substitute",function(Y){
         this.args[1] = Y.substitute(this.args[1],{inputFile:this.sourcePath});
         this.args[3] = Y.substitute(this.args[3],{outputFile:this.outputPath});
         this.complete = false;
+        this.deleteSource = false;
         this.progress = 0;
         this.status = "created";
         this.id = Y.stamp(this);
@@ -74,7 +75,7 @@ YUI().use("json","substitute",function(Y){
     
     var init = function(){
         loadConfig(function(){
-           checkJobs();
+            checkJobs();
         
             if (!module.parent) {
                 app.listen(8181);
@@ -83,7 +84,7 @@ YUI().use("json","substitute",function(Y){
         });
     };
     
-    var addJob = function(path, profileID,cb){
+    var addJob = function(path, profileID, deleteSource, cb){
         cb = cb || function(){};
         validatePath(path,function(check){
             if(!check.success){
@@ -98,33 +99,62 @@ YUI().use("json","substitute",function(Y){
                     cb({success:false,msg:"Path not in within root path"});
                     return;
                 }
+                if(deleteSource){
+                    job.deleteSource = true;
+                }
                 config.jobs[job.id] = job;
                 config.queue.push(job.id);
                 job.status = "Queued";
                 saveConfig(function(){
-                    if (config.queue.length > 0 && config.currentJobID === null){
-                        startJob(config.queue[0]);
-                    }
+                    checkJobs();
                     cb({success:true,msg:"Job Added", jobID:job.id});
                     return;
                 });
             }
         });
     };
+
+    var readdJob = function(job){
+        var msg;
+        if(job){
+            if(config.queue.indexOf(job.id) < 0){
+                config.queue.push(
+                    config.doneQueue.splice(
+                        config.doneQueue.indexOf(job.id),
+                        1
+                    )
+                );
+                job.status = "Requeued";
+                checkJobs();
+                saveConfig();
+                msg = {success:true,msg:"Job readded"};
+            }else{
+                msg = {success:false,msg:"Job already in queue"};
+            }
+        }else{
+            msg = {success:false,msg:"Job not found"};
+        }
+        return msg;
+    }
     
     var removeJob = function(jobID){
-        if(jobID == config.currentJobID && handbrake && handbrake.pid){
+        var jobIndex = config.queue.indexOf(jobID);
+        if(jobIndex < 0){
+            return {success:false,msg:"Job not in Queue"};
+        }else{
+            config.doneQueue.push(config.queue.splice(jobIndex,1)[0]);
+        }
+        if(jobID === config.currentJobID && handbrake && handbrake.pid){
             handbrake.kill("SIGINT");
             config.jobs[config.currentJobID].status = "Terminated by user";
             saveConfig();
             return {success:true,msg:"Killed job"};
-        }else if(config.queue.indexOf(jobID) > -1){
+        }else{
             config.queue.splice(config.queue.indexOf(jobID),1);
             config.jobs[jobID].status = "Canceled";
             saveConfig();
             return {success:true,msg:"Removed job"};
         }
-        return {success:false,msg:"Job not in Queue"};
     };
     
     var checkJobs = function(){
@@ -135,13 +165,13 @@ YUI().use("json","substitute",function(Y){
     
     var mkdirP = function(p, mode, f) {
         var cb = f || function () {};
-        if (p.charAt(0) != '/') { cb('Relative path: ' + p); return; }
+        if (p.charAt(0) !== '/') { cb('Relative path: ' + p); return; }
         
         var ps = path.normalize(p).split('/');
         path.exists(p, function (exists) {
             if (exists) cb(null);
             else mkdirP(ps.slice(0,-1).join('/'), mode, function (err) {
-                if (err && err.errno != process.EEXIST){
+                if (err && err.errno !== process.EEXIST){
                     cb(err);
                 }else{
                     fs.mkdir(p, mode, cb);
@@ -170,16 +200,58 @@ YUI().use("json","substitute",function(Y){
     };
     
     var update = function(data){
-        config.jobs[config.currentJobID].status = data.toString();
+        var updateMsg = data.toString(),
+            percent = parseFloat(updateMsg.match(/\d+\.\d+\ \%/)),
+            job = config.jobs[config.currentJobID];
+        
+        if(percent){
+            job.status = percent + "% complete.";
+            if(percent > 99){
+                job.complete = true;
+            }
+        }else{
+            if(job.complete){
+                job.status = "Job completed successfully.";
+            }else{
+                job.status = "Job starting.";
+            }
+        }
     };
     
     var onComplete = function(code){
         var job = config.jobs[config.currentJobID];
-        job.status = "Handbrake Completed";
-        config.queue.shift(config.currentJobID);
+        if(code === 1){
+            job.status = "Handbrake crashed.";
+        }else{
+            if(job.complete){
+                if(job.deleteSource){
+                    fs.unlink(job.sourcePath, function(err){
+                        if (!err){
+                            console.log("File deleted: "+job.sourcePath);
+                        }
+                    });
+                }
+            }else{
+                job.status = "Job Failed";
+            }
+        }
+        config.doneQueue.push(config.queue.shift(config.currentJobID));
         config.currentJobID = null;
         saveConfig();
         checkJobs();
+    };
+
+    var moveJobTo = function(jobID, index){
+        index = parseInt(index) < 1 ? 1 : parseInt(index);
+        index = index > config.queue.length - 1 ? config.queue.length - 1 : index;
+        var jobIndex = config.queue.indexOf(jobID);
+        if(jobIndex<0){
+            return {success:false, msg:"Job not in queue."};
+        }else{
+            config.queue.splice(index,0,config.queue.splice(jobIndex,1)[0]);
+            saveConfig();
+            return {success:true, msg:"Job moved to position "+(index+1)+"."};
+        }
     };
     
     var saveConfig = function(cb){
@@ -215,7 +287,7 @@ YUI().use("json","substitute",function(Y){
             callback({success:false,msg:"Please provide a path"});
             return;
         }
-        if(path[0] != '/'){
+        if(path[0] !== '/'){
             callback({success:false,msg:"Not an absolute path"});
             return;
         }
@@ -228,19 +300,20 @@ YUI().use("json","substitute",function(Y){
         });
     };
     
-    var addFolder = function(path,profile,cb){
+    var addFolder = function(path, profile, deleteSource, cb){
         cb = cb || function(){};
         var check = validatePath(path,function(check){
             if(!check.success){
                 cb([check]);
             }else{
                 findAllMediaFiles(path,function(files){
+                    files.sort();
                     msgs = [];
                     if(files.length){
                         Y.log("Found "+files.length+" media files");
                         var n = files.length;
                         files.forEach(function(file){
-                            addJob(file,profile,function(msg){
+                            addJob(file, profile, deleteSource, function(msg){
                                 Y.log("Pushing job: "+file);
                                 msgs.push(msg);
                                 n--;
@@ -248,7 +321,7 @@ YUI().use("json","substitute",function(Y){
                                 if(n === 0){
                                     cb(msgs);
                                 }
-                            })
+                            });
                         });
                     }else{
                         cb([{success:false,msg:"No suitable files found"}]);
@@ -256,45 +329,67 @@ YUI().use("json","substitute",function(Y){
                 });
             }
         });
-        
-        
     };
+
+    var clearCompleteJobs = function(){
+        var deleted = 0;
+        for(var jobID in config.jobs){
+            if(config.jobs.hasOwnProperty(jobID)){
+                if(config.queue.indexOf(jobID) < 0){
+                    delete config.jobs[jobID];
+                    deleted++;
+                }
+            }
+        }
+        config.doneQueue = [];
+        return {success:true,msg:deleted+" completed jobs cleared"};
+    }
     
     var isRightFileType = function(extn){
-        return (extn == 'mkv' || extn == 'avi' || extn == 'mp4');
+        return (extn === 'mkv' || extn === 'avi');
     };
     
     var findAllMediaFiles = function(path,cb){
         cb = cb || function(){};
         var rightFiles = [];
         fs.readdir(path,function(err,files){
+            if(err || !files.length){
+                console.log(err);
+                cb(rightFiles);
+                return;
+            }
+
             var i = files.length;
+
+            var checkDone = function(file){
+                i--;
+                if(i < 1){
+                    cb(rightFiles);
+                }
+            };
+
             files.forEach(function(file){
                 fs.stat(path+"/"+file,function(err,fileStat){
-                    if(fileStat.isFile() && file.match(/^.*\.(.*)$/)){
-                        var extn = file.match(/^.*\.(.*)$/)[1].toLowerCase();
-                        if(isRightFileType(extn)){
-                            rightFiles.push(path + '/' + file);
-                        }
-                        i--;
-                        if(i === 0){
-                            cb(rightFiles);
-                        }
-                    }
-                    if(fileStat.isDirectory()){
-                        var subFiles = findAllMediaFiles(path+"/"+file,function(subFiles){
+                    if(err){
+                        console.log(err);
+                        checkDone();
+                    }else if(fileStat.isDirectory()){
+                        findAllMediaFiles(path+"/"+file, function(subFiles){
                             rightFiles = rightFiles.concat(subFiles);
+                            checkDone();
                         });
-                        i--;
-                        if(i === 0){
-                            rightFiles.sort();
-                            cb(rightFiles);
+                    }else{
+                        if(file.match(/^.*\.(.*)$/)){
+                            var extn = file.match(/^.*\.(.*)$/)[1].toLowerCase();
+                            if(isRightFileType(extn)){
+                                rightFiles.push(path + '/' + file);
+                            }
                         }
+                        checkDone();
                     }
                 });
             });
         });
-		return rightFiles;
     };
     
     var flashMsgs = function(req,msgs){
@@ -309,16 +404,21 @@ YUI().use("json","substitute",function(Y){
         }
     };
 
+/*********************************************************/
+/*********************** Routes **************************/
+/*********************************************************/
+
     app.get('/', function(req, res){
         var queuedJobs = [],
             completedJobs = [];
-        for(var n in config.jobs){
-            var job = config.jobs[n];
-            if(config.queue.indexOf(job.id) > -1){
-                queuedJobs.push(job);
-            }else{
-                completedJobs.push(job);
-            }
+        for(var i = 0;i < config.queue.length; i++){
+            var job = config.jobs[config.queue[i]];
+            queuedJobs.push(job);
+        }
+
+        for(var i = 0;i < config.doneQueue.length; i++){
+            var job = config.jobs[config.doneQueue[i]];
+            completedJobs.push(job);
         }
         
         res.render('index', {
@@ -327,18 +427,54 @@ YUI().use("json","substitute",function(Y){
             completedJobs:completedJobs,
             profiles:profiles,
             msgs:req.flash("msgs"),
-            errors:req.flash("errors")
+            errors:req.flash("errors"),
+            rootFolder:rootFolder+"/"
         });
+    });
+
+    app.get("/json/folder-search", function(req, res){
+        var json = {
+                results:[]
+            },
+            reqPath = req.query.path;
+        if(Y.Lang.isString(reqPath) && reqPath.indexOf(rootFolder) === 0){
+            var pieces = reqPath.split("/"),
+                search = pieces.pop(),
+                folder = pieces.join("/");
+            fs.realpath(folder,function(err){
+               if(err){
+                   res.send(json);
+               }else{
+                   fs.readdir(folder, function(err, files){
+                       if(err){
+                           res.send(json)
+                       }else{
+                           files.forEach(function(file){
+                               if(search == "" || file.toLowerCase().match(search.toLowerCase())){
+                                   var result = {path:folder+"/"+file};
+                                   if(fs.statSync(folder+"/"+file).isDirectory()){
+                                       result.path += "/";
+                                   }
+                                   json.results.push(result);
+                               }
+                           });
+                           res.send(json)
+                       }
+                   });
+               }
+            });
+        }else{
+            json.results.push({path:rootFolder+"/"});
+            res.send(json);
+        }
     });
     
     app.get("/fragments/queue", function(req, res){
         var queuedJobs = [];
         
-        for(var n in config.jobs){
-            var job = config.jobs[n];
-            if(config.queue.indexOf(job.id) > -1){
-                queuedJobs.push(job);
-            }
+        for(var i = 0;i < config.queue.length; i++){
+            var job = config.jobs[config.queue[i]];
+            queuedJobs.push(job);
         }
         
         res.render("queue",{
@@ -346,15 +482,13 @@ YUI().use("json","substitute",function(Y){
             layout:false
         });
     });
-    
+
     app.get("/fragments/complete", function(req, res){
         var completedJobs = [];
-        
-        for(var n in config.jobs){
-            var job = config.jobs[n];
-            if(config.queue.indexOf(job.id) < 0){
-                completedJobs.push(job);
-            }
+
+        for(var i = 0;i < config.doneQueue.length; i++){
+            var job = config.jobs[config.doneQueue[i]];
+            completedJobs.push(job);
         }
         
         res.render("complete",{
@@ -364,46 +498,77 @@ YUI().use("json","substitute",function(Y){
     });
     
     app.get('/add/', function(req, res){
-        addJob(path.normalize(req.query.path),req.query.profile,function(msg){
-            Y.log(msg);
+        addJob(path.normalize(req.query.path),req.query.profile, req.query.deleteSource, function(msg){
             flashMsgs(req,[msg]);
             res.redirect("home");
         });
     });
+
+    app.get('/json/add/', function(req, res){
+        addJob(path.normalize(req.query.path),req.query.profile, req.query.deleteSource, function(msg){
+            res.send([msg]);
+        });
+    });
     
     app.get('/readd/:jobID', function(req, res){
-        var job = config.jobs[req.params.jobID],
-            msg;
-        if(job){
-            if(config.queue.indexOf(job.id) < 0){
-                config.queue.push(job.id);
-                job.status = "Requeued";
-                checkJobs();
-                saveConfig();
-                msg = {success:true,msg:"Job readded"};
-            }else{
-                msg = {success:false,msg:"Job already in queue"};
-            }
-        }else{
-            msg = {success:false,msg:"Job not found"};
-        }
-        
+        var msg = readdJob(config.jobs[req.params.jobID]);
         flashMsgs(req,[msg]);
         res.redirect("home");
     });
+
+    app.get('/json/readd/:jobID', function(req, res){
+        var msg = readdJob(config.jobs[req.params.jobID]);
+        res.send([msg]);
+    });
     
     app.get('/add-folder/', function(req, res){
-        addFolder(path.normalize(req.query.path),req.query.profile,function(msgs){
+        addFolder(path.normalize(req.query.path), req.query.profile, req.query.deleteSource, function(msgs){
             flashMsgs(req,msgs);
             res.redirect("home");
         });
-        
+    });
+
+    app.get('/json/add-folder/', function(req, res){
+        addFolder(path.normalize(req.query.path), req.query.profile, req.query.deleteSource, function(msgs){
+            res.send(msgs);
+        });
+    });
+
+    app.get('/clear-completed/',function(req, res){
+        var msg = clearCompleteJobs();
+        saveConfig(function(){
+            flashMsgs(req,[msg]);
+            res.redirect("home");
+        });
+    });
+
+    app.get('/json/clear-completed/',function(req, res){
+        var msg = clearCompleteJobs();
+        saveConfig(function(){
+            res.send([msg]);
+        });
     });
     
     app.get('/remove/:jobID', function(req, res){
-        var response = removeJob(req.params.jobID);
-        flashMsgs(req,[response]);
+        var msg = removeJob(req.params.jobID);
+        flashMsgs(req,[msg]);
         res.redirect("home");
+    });
+
+    app.get('/json/remove/:jobID', function(req, res){
+        var msg = removeJob(req.params.jobID);
+        res.send([msg]);
+    });
+
+    app.get('/move-job-to/:jobID/:newIndex',function(req, res){
+        var msg = moveJobTo(req.params.jobID, req.params.newIndex);
+        flashMsgs(req, [msg]);
+        res.redirect("home");
+    });
+
+    app.get('/json/move-job-to/:jobID/:newIndex',function(req, res){
+        var msg = moveJobTo(req.params.jobID, req.params.newIndex);
+        res.send([msg]);
     });
     
     init();

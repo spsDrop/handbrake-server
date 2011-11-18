@@ -1,10 +1,15 @@
 h3 Queued Jobs
 ol
-    - queuedJobs.forEach(function(job){
-        li 
-            span.name= job.name
-            |  - 
-            span.status= job.status
-            |  - 
-            a(href="/remove/"+job.id) remove job
+    - queuedJobs.forEach(function(job,i){
+        li
+            p
+                span.name= job.name
+            p
+                span.status= job.status
+            p
+                a(href="/move-job-to/"+job.id+"/"+(i-1)) move up
+                |  \|
+                a(href="/move-job-to/"+job.id+"/"+0)  move top
+                |  \|
+                a(href="/remove/"+job.id) remove job
     - })
