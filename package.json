@@ -1,0 +1,18 @@
+{
+	"author": "Jesse Foltz",
+	"name": "handbrake-server",
+	"description": "Handbrake Server",
+	"version": "0.0.1",
+	"engines": {
+		"node": "0.4.x"
+	},
+	"dependencies": {
+		"express": "2.4.x",
+		"connect": "1.6.x",
+		"mime": "1.2.x",
+		"jade": "0.14.x",
+		"yui3": "0.6.x",
+		"yui3-core": "3.3.x",
+		"jsdom": "0.2.3"
+	}
+}
