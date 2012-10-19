@@ -8,8 +8,8 @@ ol
                 span.status= job.status
             p
                 a(href="/move-job-to/"+job.id+"/"+(i-1)) move up
-                |  \|
-                a(href="/move-job-to/"+job.id+"/"+0)  move top
-                |  \|
+                |  | 
+                a(href="/move-job-to/"+job.id+"/"+0) move top
+                |  | 
                 a(href="/remove/"+job.id) remove job
     - })

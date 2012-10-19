@@ -5,7 +5,6 @@ YUI().use("node-load", "io", "json", "node-event-delegate",'autocomplete', 'auto
             complete = el.one("li.job-queue.complete");
         
         var init = function(){
-            setInterval(updateLists, 5000);
             Y.one("body").delegate("click", function(e){
                 e.preventDefault();
                 getJSON("/json"+e.currentTarget.getAttribute("href"));
@@ -14,7 +13,8 @@ YUI().use("node-load", "io", "json", "node-event-delegate",'autocomplete', 'auto
                 e.preventDefault();
                 var form = e.currentTarget;
                 getJSON("/json"+form.getAttribute("action"), form);
-            })
+            });
+            updateLists();
         };
 
         var getJSON = function(url, form){
@@ -45,7 +45,10 @@ YUI().use("node-load", "io", "json", "node-event-delegate",'autocomplete', 'auto
         
         var updateLists = function(){
             queue.load("/fragments/queue");
-            complete.load("/fragments/complete");
+            complete.load("/fragments/complete", function(){
+                
+                setTimeout(updateLists, 750);
+            });
         };
         
         init.apply(this);

@@ -158,6 +158,9 @@ YUI().use("json","substitute",function(Y){
     };
     
     var checkJobs = function(){
+        console.log("Queue Length: "+config.queue.length);
+        console.log("currentJobID: "+config.currentJobID);
+        console.log("handbrake: "+handbrake);
         if(config.queue.length && (!config.currentJobID || !handbrake)){
             startJob(config.queue[0]);
         }
@@ -202,12 +205,21 @@ YUI().use("json","substitute",function(Y){
     var update = function(data){
         var updateMsg = data.toString(),
             percent = parseFloat(updateMsg.match(/\d+\.\d+\ \%/)),
-            job = config.jobs[config.currentJobID];
+            job = config.jobs[config.currentJobID],
+            h,m,s;
+        
+        if(updateMsg.match("Rip done!")){
+            job.complete = true;   
+        }
         
         if(percent){
-            job.status = percent + "% complete.";
-            if(percent > 99){
-                job.complete = true;
+            if(updateMsg.match("ETA")){
+                h = updateMsg.match(/(\d\d)h/)[1]+":";
+                m = updateMsg.match(/(\d\d)m/)[1]+":";
+                s = updateMsg.match(/(\d\d)s/)[1],
+                job.status = percent + "% complete, Time remaining "+h+m+s+".";
+            }else{
+                job.status = percent + "% complete.";
             }
         }else{
             if(job.complete){
@@ -220,6 +232,10 @@ YUI().use("json","substitute",function(Y){
     
     var onComplete = function(code){
         var job = config.jobs[config.currentJobID];
+        
+        console.log("job complete code: "+code);
+        handbrake = null;
+        
         if(code === 1){
             job.status = "Handbrake crashed.";
         }else{
@@ -346,7 +362,7 @@ YUI().use("json","substitute",function(Y){
     }
     
     var isRightFileType = function(extn){
-        return (extn === 'mkv' || extn === 'avi');
+        return (extn === 'mkv' || extn === 'avi' || extn === 'ts');
     };
     
     var findAllMediaFiles = function(path,cb){
