@@ -1,0 +1,4 @@
+Hand Brake Server
+======================
+
+A node based http server front end for hand break that allows queing and proccessing profiles.
