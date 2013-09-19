@@ -11,8 +11,6 @@ var app = module.exports = express.createServer(),
 process.chdir(appPath);
 
 // Configuration
-var HandbrakeServerConfig = require('./config');
-
 app.configure(function(){
     app.set('views', __dirname + '/views');
     app.set('view engine', 'jade');
@@ -35,7 +33,8 @@ app.configure('production', function(){
 // Routes
 
 YUI().use("json","substitute",function(Y){
-    var rootFolder = HandbrakeServerConfig.main.rootFolder,
+	var HandbrakeServerConfig = require('./HandbrakeServerConfig');
+    	var rootFolder = HandbrakeServerConfig.main.rootFolder,
 	outputFolder = HandbrakeServerConfig.main.outputFolder,
 	profiles = HandbrakeServerConfig.profiles,
         handbrake,
@@ -196,7 +195,7 @@ YUI().use("json","substitute",function(Y){
             job = config.jobs[config.currentJobID],
             h,m,s;
         
-        if(updateMsg.match("Encode done!")){
+        if(updateMsg.match(HandbrakeServerConfig.main.handbrakeExit)){
             job.complete = true;   
         }
         
