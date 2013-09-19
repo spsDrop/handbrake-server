@@ -171,7 +171,7 @@ YUI().use("json","substitute",function(Y){
         if (p.charAt(0) !== '/') { cb('Relative path: ' + p); return; }
         
         var ps = path.normalize(p).split('/');
-        path.exists(p, function (exists) {
+        fs.exists(p, function (exists) {
             if (exists) cb(null);
             else mkdirP(ps.slice(0,-1).join('/'), mode, function (err) {
                 if (err && err.errno !== process.EEXIST){
@@ -208,7 +208,7 @@ YUI().use("json","substitute",function(Y){
             job = config.jobs[config.currentJobID],
             h,m,s;
         
-        if(updateMsg.match("Rip done!")){
+        if(updateMsg.match("Encode done!")){
             job.complete = true;   
         }
         
